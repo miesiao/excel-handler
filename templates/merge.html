@@ -2,9 +2,9 @@
 <html>
 <head><title>Merge 名單上傳</title></head>
 <body>
-  <h2>上傳 Excel 檔案（名單整理）</h2>
+  <h2>上傳多個 Excel 檔案（名單整理）</h2>
   <form action="/merge" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".xls,.xlsx" required>
+    <input type="file" name="files" accept=".xls,.xlsx" multiple required>
     <button type="submit">上傳並處理</button>
   </form>
 </body>

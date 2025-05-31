@@ -1,5 +1,5 @@
 import pandas as pd
-import pathlib, re
+import pathlib, re, os
 from typing import List
 
 CUSTOMER_COL = '顧客'
@@ -10,12 +10,12 @@ AMT_COL = '銷售額'
 CRAFT_COL = '工藝分類'
 SALES_COL = '銷售人員'
 
-TIBET_KEYS = ['中國藏區', '中国藏区', '西藏', '藏區', '藏区', '四川藏區', '四川藏区', '青海藏區', '青海藏区', '甘肅藏區', '甘肃藏区', '雲南藏區', '云南藏区']
-AAA_ANDES = '安地斯羊駝'
+TIBET_KEYS = ['中國藏區','中国藏区','西藏','藏區','藏区','四川藏區','四川藏区','青海藏區','青海藏区','甘肅藏區','甘肃藏区','雲南藏區','云南藏区']
+AAA_ANDES   = '安地斯羊駝'
 AAA_PERSIAN = '波斯鑲嵌'
 TIBET_LABEL = '北方牧人'
-TOTAL_KEYS = ['總計', '加總', '合計', 'TOTAL', 'Total']
-BRANCH_MAP = {'泰順': '泰順本店', '大安2': '大安2店'}
+TOTAL_KEYS  = ['總計','加總','合計','TOTAL','Total']
+BRANCH_MAP  = {'泰順':'泰順本店','大安2':'大安2店'}
 
 def contains(text: str, keys: List[str]) -> bool:
     return any(k in text for k in keys)
@@ -64,13 +64,23 @@ def branch_summary(df: pd.DataFrame) -> pd.DataFrame:
     g[AMT_COL] = g[AMT_COL].apply(lambda x: f"{x:,.0f}")
     return g
 
-def process_excel(input_path, output_path):
-    df = pd.read_excel(input_path, engine='openpyxl')
-    df['_src'] = input_path.split('/')[-1]
+def process_excel(input_folder, output_path):
+    # 處理多個檔案
+    all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith(('.xls', '.xlsx'))]
+    if not all_files:
+        raise Exception("沒有找到 Excel 檔案")
 
-    df_all = preprocess(df)
-    df_online = preprocess(df[~df['_src'].str.contains('pos', case=False, na=False)])
-    df_pos = preprocess(df[df['_src'].str.contains('pos', case=False, na=False)])
+    frames = []
+    for f in all_files:
+        df = pd.read_excel(f, engine='openpyxl')
+        df['_src'] = os.path.basename(f)
+        frames.append(df)
+
+    raw = pd.concat(frames, ignore_index=True)
+
+    df_all = preprocess(raw)
+    df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])
+    df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)])
 
     tbl_all = craft_summary(df_all)
     tbl_online = craft_summary(df_online)

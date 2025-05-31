@@ -62,9 +62,17 @@ def extract_cols(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = df[col].apply(norm_phone)
     return df
 
-def process_excel(input_path, output_path):
-    raw = read_file(input_path)
-    raw = raw[~raw.apply(is_invalid_row, axis=1)]
-    extracted = extract_cols(raw)
-    merged = extracted.drop_duplicates(subset=["電話", "電話2", "電郵", "電郵2"], keep="first")
+def process_excel(input_folder, output_path):
+    all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith((".xls", ".xlsx"))]
+    if not all_files:
+        raise Exception("⚠️ 沒有找到 Excel 檔")
+
+    frames = []
+    for path in all_files:
+        raw = read_file(path)
+        raw = raw[~raw.apply(is_invalid_row, axis=1)]
+        frames.append(extract_cols(raw))
+
+    merged = pd.concat(frames, ignore_index=True)
+    merged = merged.drop_duplicates(subset=["電話", "電話2", "電郵", "電郵2"], keep="first")
     merged.to_excel(output_path, index=False)
