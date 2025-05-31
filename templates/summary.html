@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head><title>Order Summary 上傳</title></head>
+<body>
+  <h2>上傳訂單 Excel 檔案（分類與彙總）</h2>
+  <form action="/summary" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".xls,.xlsx" required>
+    <button type="submit">上傳並處理</button>
+  </form>
+</body>
+</html>
