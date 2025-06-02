@@ -1,5 +1,6 @@
 import pandas as pd
 import pathlib, re, os
+import xlrd
 from typing import List
 
 CUSTOMER_COL = '顧客'
@@ -64,16 +65,19 @@ def branch_summary(df: pd.DataFrame) -> pd.DataFrame:
     g[AMT_COL] = g[AMT_COL].apply(lambda x: f"{x:,.0f}")
     return g
 
-# ✅ 專門處理多格式 Excel 檔的讀取
+# ✅ 改用 xlrd 自行讀取 .xls
 def load_orders(path):
-    suf = pathlib.Path(path).suffix.lower()
-    if suf == '.xls':
-        return pd.read_excel(path, engine='xlrd')
-    if suf in ('.xlsx', '.xlsm'):
-        return pd.read_excel(path, engine='openpyxl')
-    raise ValueError(f"不支援的檔案格式：{path}")
+    suffix = pathlib.Path(path).suffix.lower()
+    if suffix == ".xls":
+        wb = xlrd.open_workbook(path)
+        sheet = wb.sheet_by_index(0)
+        data = [sheet.row_values(i) for i in range(sheet.nrows)]
+        return pd.DataFrame(data[1:], columns=data[0])
+    elif suffix in (".xlsx", ".xlsm"):
+        return pd.read_excel(path, engine="openpyxl")
+    else:
+        raise ValueError(f"不支援的檔案格式：{path}")
 
-# ✅ Flask 用的主接口：多檔合併處理
 def process_excel(input_folder, output_path):
     all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith(('.xls', '.xlsx'))]
     if not all_files:
@@ -87,6 +91,9 @@ def process_excel(input_folder, output_path):
             frames.append(df)
         except Exception as e:
             print(f"❌ 無法讀取檔案 {f}: {e}")
+
+    if not frames:
+        raise Exception("⚠️ 所有檔案都讀取失敗")
 
     raw = pd.concat(frames, ignore_index=True)
 
