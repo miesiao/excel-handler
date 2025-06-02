@@ -5,20 +5,19 @@ from typing import Union
 
 PHONE_ALIASES = ["電話", "聯絡電話", "電話號碼", "手機", "訂購帳號電話", "收件人電話號碼"]
 EMAIL_ALIASES = ["電郵", "Email", "E-mail", "訂購帳號電郵"]
-NAME_ALIASES = ["姓名", "訂購帳號姓名"]
+NAME_ALIASES  = ["姓名", "訂購帳號姓名"]
 PHONE_RE = re.compile(r"\d+")
 
+# ✅ 支援 .xls/.xlsx 的讀檔函式
 def read_file(path: str, sheet: Union[int, str] = 0) -> pd.DataFrame:
     if path.lower().endswith(".xlsx"):
         return pd.read_excel(path, sheet_name=sheet, engine="openpyxl", dtype=str)
     elif path.lower().endswith(".xls"):
-        wb = xlrd.open_workbook(path)
-        ws = wb.sheet_by_index(sheet) if isinstance(sheet, int) else wb.sheet_by_name(sheet)
-        df = pd.DataFrame([ws.row_values(r) for r in range(ws.nrows)][1:], columns=ws.row_values(0)).astype(str)
+        return pd.read_excel(path, sheet_name=sheet, engine="xlrd", dtype=str)
     else:
-        raise ValueError(f"不支援檔案型別：{path}")
-    return df
+        raise ValueError(f"不支援的檔案型別：{path}")
 
+# ✅ 手機號碼正規化
 def norm_phone(raw: str) -> str:
     if pd.isna(raw) or not raw:
         return ""
@@ -29,6 +28,7 @@ def norm_phone(raw: str) -> str:
         digits = digits[1:]
     return "+886" + digits if digits.startswith("9") and len(digits) >= 9 else raw
 
+# ✅ 判斷資料列是否無效（過濾掉）
 def is_invalid_row(row: pd.Series) -> bool:
     if any(alias in row.index and "南南" in str(row[alias]) for alias in NAME_ALIASES):
         return True
@@ -42,6 +42,7 @@ def is_invalid_row(row: pd.Series) -> bool:
             return True
     return False
 
+# ✅ 只保留最多 2 欄電話 + 2 欄 email，並統一欄名
 def extract_cols(df: pd.DataFrame) -> pd.DataFrame:
     phone_cols, email_cols = [], []
     for col in df.columns:
@@ -62,16 +63,23 @@ def extract_cols(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = df[col].apply(norm_phone)
     return df
 
+# ✅ Flask 專用主函式：處理整個資料夾的 Excel 合併
 def process_excel(input_folder, output_path):
     all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith((".xls", ".xlsx"))]
     if not all_files:
-        raise Exception("⚠️ 沒有找到 Excel 檔")
+        raise Exception("❌ 沒有找到任何 Excel 檔案")
 
     frames = []
     for path in all_files:
-        raw = read_file(path)
-        raw = raw[~raw.apply(is_invalid_row, axis=1)]
-        frames.append(extract_cols(raw))
+        try:
+            raw = read_file(path)
+            raw = raw[~raw.apply(is_invalid_row, axis=1)]
+            frames.append(extract_cols(raw))
+        except Exception as e:
+            print(f"❌ 無法處理檔案 {path}: {e}")
+
+    if not frames:
+        raise Exception("⚠️ 所有檔案都失敗，無資料輸出")
 
     merged = pd.concat(frames, ignore_index=True)
     merged = merged.drop_duplicates(subset=["電話", "電話2", "電郵", "電郵2"], keep="first")
