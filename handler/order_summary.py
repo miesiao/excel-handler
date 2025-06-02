@@ -11,11 +11,11 @@ CRAFT_COL = '工藝分類'
 SALES_COL = '銷售人員'
 
 TIBET_KEYS = ['中國藏區','中国藏区','西藏','藏區','藏区','四川藏區','四川藏区','青海藏區','青海藏区','甘肅藏區','甘肃藏区','雲南藏區','云南藏区']
-AAA_ANDES   = '安地斯羊駝'
+AAA_ANDES = '安地斯羊駝'
 AAA_PERSIAN = '波斯鑲嵌'
 TIBET_LABEL = '北方牧人'
-TOTAL_KEYS  = ['總計','加總','合計','TOTAL','Total']
-BRANCH_MAP  = {'泰順':'泰順本店','大安2':'大安2店'}
+TOTAL_KEYS = ['總計','加總','合計','TOTAL','Total']
+BRANCH_MAP = {'泰順': '泰順本店', '大安2': '大安2店'}
 
 def contains(text: str, keys: List[str]) -> bool:
     return any(k in text for k in keys)
@@ -64,17 +64,29 @@ def branch_summary(df: pd.DataFrame) -> pd.DataFrame:
     g[AMT_COL] = g[AMT_COL].apply(lambda x: f"{x:,.0f}")
     return g
 
+# ✅ 專門處理多格式 Excel 檔的讀取
+def load_orders(path):
+    suf = pathlib.Path(path).suffix.lower()
+    if suf == '.xls':
+        return pd.read_excel(path, engine='xlrd')
+    if suf in ('.xlsx', '.xlsm'):
+        return pd.read_excel(path, engine='openpyxl')
+    raise ValueError(f"不支援的檔案格式：{path}")
+
+# ✅ Flask 用的主接口：多檔合併處理
 def process_excel(input_folder, output_path):
-    # 處理多個檔案
     all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith(('.xls', '.xlsx'))]
     if not all_files:
-        raise Exception("沒有找到 Excel 檔案")
+        raise Exception("❌ 沒有找到任何 Excel 檔案")
 
     frames = []
     for f in all_files:
-        df = pd.read_excel(f, engine='openpyxl')
-        df['_src'] = os.path.basename(f)
-        frames.append(df)
+        try:
+            df = load_orders(f)
+            df['_src'] = os.path.basename(f)
+            frames.append(df)
+        except Exception as e:
+            print(f"❌ 無法讀取檔案 {f}: {e}")
 
     raw = pd.concat(frames, ignore_index=True)
 
