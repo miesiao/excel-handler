@@ -40,11 +40,19 @@ def extract_craft(name):
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+
+    # 付款狀態篩選
+    if '付款狀態' in df.columns:
+        df = df[df['付款狀態'].isin(['已付款', '已部分退款'])]
+
+    # 其他篩選
     df = df[~df[NAME_COL].astype(str).str.contains('|'.join(TOTAL_KEYS), na=False)]
     df = df[~df[CUSTOMER_COL].astype(str).str.contains('南南', na=False)]
     df[CRAFT_COL] = df[NAME_COL].apply(extract_craft)
     df[AMT_COL] = pd.to_numeric(df[PRICE_COL], errors='coerce').fillna(0) * pd.to_numeric(df[QTY_COL], errors='coerce').fillna(0)
+
     return df
+
 
 def craft_summary(df: pd.DataFrame) -> pd.DataFrame:
     g = df.groupby(CRAFT_COL, as_index=False)[AMT_COL].sum().sort_values(AMT_COL, ascending=False)
