@@ -38,7 +38,7 @@ def extract_craft(name):
     aaa = re.sub(r'[A-Za-z\d]+', '', aaa).strip()
     return aaa or '未知'
 
-def preprocess(df: pd.DataFrame, is_pos=False) -> pd.DataFrame:
+def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     if '付款狀態' in df.columns:
@@ -48,14 +48,19 @@ def preprocess(df: pd.DataFrame, is_pos=False) -> pd.DataFrame:
     df = df[~df[CUSTOMER_COL].astype(str).str.contains('南南', na=False)]
     df[CRAFT_COL] = df[NAME_COL].apply(extract_craft)
 
-    # 金額來源
-    if is_pos and '訂單合計' in df.columns:
-        df[AMT_COL] = pd.to_numeric(df['訂單合計'], errors='coerce').fillna(0)
-    elif '付款總金額' in df.columns:
-        df[AMT_COL] = pd.to_numeric(df['付款總金額'], errors='coerce').fillna(0)
-    else:
-        df[AMT_COL] = 0
+    # 逐筆自動判斷 POS 或網店
+    amt = []
+    for _, row in df.iterrows():
+        src = str(row.get('_src', '')).lower()
+        if 'pos' in src and '訂單合計' in df.columns:
+            a = pd.to_numeric(row.get('訂單合計', 0), errors='coerce')
+        elif '付款總金額' in df.columns:
+            a = pd.to_numeric(row.get('付款總金額', 0), errors='coerce')
+        else:
+            a = 0
+        amt.append(a)
 
+    df[AMT_COL] = pd.Series(amt).fillna(0)
     return df
 
 def craft_summary(df: pd.DataFrame) -> pd.DataFrame:
@@ -109,9 +114,9 @@ def process_excel(input_folder, output_path):
 
     raw = pd.concat(frames, ignore_index=True)
 
-    df_all = preprocess(raw)  # 全部檔案，計算用「付款總金額」
-    df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])  # 網店
-    df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)], is_pos=True)  # POS，改用「訂單合計」
+	df_all = preprocess(raw)
+	df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])
+	df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)])
 
 
     tbl_all = craft_summary(df_all)
