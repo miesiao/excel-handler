@@ -40,15 +40,11 @@ def extract_craft(name):
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-
     if '付款狀態' in df.columns:
         df = df[df['付款狀態'].isin(['已付款', '已部分退款'])]
-
     df = df[~df[NAME_COL].astype(str).str.contains('|'.join(TOTAL_KEYS), na=False)]
     df = df[~df[CUSTOMER_COL].astype(str).str.contains('南南', na=False)]
     df[CRAFT_COL] = df[NAME_COL].apply(extract_craft)
-
-    # 逐筆自動判斷 POS 或網店
     amt = []
     for _, row in df.iterrows():
         src = str(row.get('_src', '')).lower()
@@ -59,7 +55,6 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         else:
             a = 0
         amt.append(a)
-
     df[AMT_COL] = pd.Series(amt).fillna(0)
     return df
 
@@ -82,7 +77,18 @@ def branch_summary(df: pd.DataFrame) -> pd.DataFrame:
     g[AMT_COL] = g[AMT_COL].apply(lambda x: f"{x:,.0f}")
     return g
 
-# ✅ 改用 xlrd 自行讀取 .xls
+def merge_summary(tbl1, tbl2):
+    df1 = tbl1.copy()
+    df2 = tbl2.copy()
+    df1[AMT_COL] = pd.to_numeric(df1[AMT_COL].str.replace(',', ''), errors='coerce').fillna(0)
+    df2[AMT_COL] = pd.to_numeric(df2[AMT_COL].str.replace(',', ''), errors='coerce').fillna(0)
+    merged = pd.merge(df1, df2, on=CRAFT_COL, how='outer', suffixes=('_網店', '_實體店'))
+    merged[AMT_COL] = merged[[f'{AMT_COL}_網店', f'{AMT_COL}_實體店']].sum(axis=1)
+    merged = merged[[CRAFT_COL, AMT_COL]].sort_values(AMT_COL, ascending=False).reset_index(drop=True)
+    merged = add_total(merged, CRAFT_COL)
+    merged[AMT_COL] = merged[AMT_COL].apply(lambda x: f"{x:,.0f}")
+    return merged
+
 def load_orders(path):
     suffix = pathlib.Path(path).suffix.lower()
     if suffix == ".xls":
@@ -118,9 +124,9 @@ def process_excel(input_folder, output_path):
     df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])
     df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)])
 
-    tbl_all = craft_summary(df_all)
     tbl_online = craft_summary(df_online)
     tbl_pos = craft_summary(df_pos)
+    tbl_all = merge_summary(tbl_online, tbl_pos)
     tbl_branch = branch_summary(df_pos)
 
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
@@ -139,4 +145,3 @@ def process_excel(input_folder, output_path):
         write_block(tbl_online, '2. 網店')
         write_block(tbl_pos, '3. 實體店')
         write_block(tbl_branch, '4. 實體店－分店')
-
