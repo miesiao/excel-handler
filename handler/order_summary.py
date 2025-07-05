@@ -38,26 +38,29 @@ def extract_craft(name):
     aaa = re.sub(r'[A-Za-z\d]+', '', aaa).strip()
     return aaa or '未知'
 
-def preprocess(df: pd.DataFrame, is_pos=False) -> pd.DataFrame:
+def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # 付款狀態篩選
     if '付款狀態' in df.columns:
         df = df[df['付款狀態'].isin(['已付款', '已部分退款'])]
 
-    # 其他清洗
     df = df[~df[NAME_COL].astype(str).str.contains('|'.join(TOTAL_KEYS), na=False)]
     df = df[~df[CUSTOMER_COL].astype(str).str.contains('南南', na=False)]
     df[CRAFT_COL] = df[NAME_COL].apply(extract_craft)
 
-    # 金額來源：POS 用「訂單合計」，其他用「付款總金額」
-    if is_pos and '訂單合計' in df.columns:
-        df[AMT_COL] = pd.to_numeric(df['訂單合計'], errors='coerce').fillna(0)
-    elif '付款總金額' in df.columns:
-        df[AMT_COL] = pd.to_numeric(df['付款總金額'], errors='coerce').fillna(0)
-    else:
-        df[AMT_COL] = 0
+    # 依每筆資料來源自動判斷金額來源
+    amt_list = []
+    for _, row in df.iterrows():
+        src = str(row['_src']).lower()
+        if 'pos' in src and '訂單合計' in df.columns:
+            amt = pd.to_numeric(row.get('訂單合計', 0), errors='coerce')
+        elif '付款總金額' in df.columns:
+            amt = pd.to_numeric(row.get('付款總金額', 0), errors='coerce')
+        else:
+            amt = 0
+        amt_list.append(amt)
 
+    df[AMT_COL] = pd.Series(amt_list).fillna(0)
     return df
 
 
