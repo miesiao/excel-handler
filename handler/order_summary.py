@@ -114,9 +114,9 @@ def process_excel(input_folder, output_path):
 
     raw = pd.concat(frames, ignore_index=True)
 
-	df_all = preprocess(raw)
-	df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])
-	df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)])
+df_all = preprocess(raw)
+df_online = preprocess(raw[~raw['_src'].str.contains('pos', case=False, na=False)])
+df_pos = preprocess(raw[raw['_src'].str.contains('pos', case=False, na=False)])
 
 
     tbl_all = craft_summary(df_all)
